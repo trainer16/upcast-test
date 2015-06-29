@@ -3,6 +3,7 @@ namespace Upcast\Test;
 
 abstract class Event {
     const NICE_DATE_FORMAT = 'D, d M Y';
+    const DATE_TITLE_DEFAULT = 'event date';
 
     /**
      * @var \DateTime
@@ -15,14 +16,22 @@ abstract class Event {
     protected $actualDate;
 
     /**
-     * @var Array
+     * @var array Array of day names e.g. [Saturday,Sunday]
+     *
      */
     protected $unavailableDays;
 
     /**
-     * @var String
+     * @var string String containing "Relative Formats" instructions
+     *
+     * @link http://php.net/manual/en/datetime.formats.relative.php
      */
     protected $alternativeDay;
+
+    /**
+     * @var string
+     */
+    protected $dateTitle = self::DATE_TITLE_DEFAULT;
     
     abstract public function __construct(\DateTime $dateTime);
 
@@ -65,8 +74,13 @@ abstract class Event {
         return null;
     }
 
+    public function getDateTitle(){
+        return $this->dateTitle;
+    }
+
+
     /**
-     * This function checks whether the target date happens on an unavailable day and uses instruction given in
+     * This function checks whether the target date happens on an unavailable day and uses instructions given in
      * self::$alternativeDay to change the date
      */
     public function checkDateAvailability(){
@@ -86,13 +100,21 @@ abstract class Event {
 
 class MidMonthMeeting extends Event {
     const TARGET_MID_MONTH_DAY = 14;
+    const DATE_TITLE = 'Mid Month Meeting Date';
 
+    /**
+     * {@inheritdoc }
+     */
     protected $unavailableDays = array(
         'Saturday',
         'Sunday',
     );
 
+    /**
+     * {@inheritdoc }
+     */
     protected $alternativeDay = 'next monday';
+    protected $dateTitle = self::DATE_TITLE;
 
     public function __construct(\DateTime $dateTime){
         $dateTime = clone $dateTime;
@@ -109,6 +131,11 @@ class MidMonthMeeting extends Event {
 
 
 class Testing extends Event {
+    const DATE_TITLE = 'End of Month Testing Date';
+
+    /**
+     * {@inheritdoc }
+     */
     protected $unavailableDays = array(
         'Friday',
         'Saturday',
@@ -116,7 +143,11 @@ class Testing extends Event {
         'Tuesday',
     );
 
+    /**
+     * {@inheritdoc }
+     */
     protected $alternativeDay = 'last thursday';
+    protected $dateTitle = self::DATE_TITLE;
 
     public function __construct(\DateTime $dateTime){
         $dateTime = clone $dateTime;
@@ -134,24 +165,64 @@ class Testing extends Event {
     }
 }
 
-$now = new \DateTime();
+class MeetingCsvBuilder {
 
-$midMonthMeeting = new MidMonthMeeting($now);
-$testing = new Testing($now);
-pr($testing, $midMonthMeeting);
+    const MONTH_COLUMN_TITLE = 'Month';
+    const MONTH_COLUMN_FORMAT = 'F';
 
+    private $rows;
+    private $numberOfMonths = 6;
+    private $sourceDateTime;
 
+    public function __construct(\DateTime $dateTime){
+        $dateTime = clone $dateTime;
+        $this->sourceDateTime = $dateTime;
 
-//Print output on screen
-function pr(){
-    $res = func_get_args();
-    if(count($res) == 1){
-        $res = array_shift($res);
+        for($i=0; $i < $this->numberOfMonths;$i++){
+            $dateTimeInstance = clone $dateTime;
+            if($i!=0){
+                $interval = "P{$i}M";
+                $dateTimeInstance->add(new \DateInterval($interval));
+            }
+
+            $midMonthMeeting = new MidMonthMeeting($dateTimeInstance);
+            $testing = new Testing($dateTimeInstance);
+
+            $row = array(
+                self::MONTH_COLUMN_TITLE => $dateTimeInstance->format(self::MONTH_COLUMN_FORMAT),
+                $midMonthMeeting->getDateTitle() => $midMonthMeeting->getActualDateNice(),
+                $testing->getDateTitle() => $testing->getActualDateNice(),
+            );
+
+            $this->rows[] = $row;
+        }
     }
-    die( '<div style="border-bottom: 2px solid #333333">&gt;&gt; START</div>'
-        . '<div><pre>'
-        . print_r($res,1)
-        . '</pre></div>'
-        . '<div style="border-top: 2px solid #333333">&lt;&lt; END</div>'
-    );
+
+    /**
+     * Print $rows into a CSV file in home directory.
+     */
+    public function printCSV(){
+        if(!empty($this->rows)){
+            $filename = 'event_dates_'.$this->sourceDateTime->getTimestamp().'.csv';
+            // create a file pointer
+            $fp = fopen($filename, 'w');
+
+            // print header by retrieving the keys of the first element in $this->rows array:
+            $header = array_keys(array_shift(array_values($this->rows)));
+            fputcsv($fp, $header);
+
+            foreach ($this->rows as $row) {
+                fputcsv($fp, $row);
+            }
+
+            fclose($fp);
+        }
+    }
 }
+
+
+
+$today = new \DateTime();
+
+$meetingCsvBuilder = new MeetingCsvBuilder($today);
+$meetingCsvBuilder->printCSV();
