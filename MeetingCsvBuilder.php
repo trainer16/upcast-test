@@ -6,12 +6,16 @@ class MeetingCsvBuilder {
 
     const MONTH_COLUMN_TITLE = 'Month';
     const MONTH_COLUMN_FORMAT = 'F';
+    const NUMBER_OF_MONTHS_DEFAULT = 6;
 
     private $rows;
-    private $numberOfMonths = 6;
+    private $numberOfMonths = self::NUMBER_OF_MONTHS_DEFAULT;
     private $sourceDateTime;
 
-    public function __construct(\DateTime $dateTime){
+    public function __construct(\DateTime $dateTime, $numberOfMonths=null){
+        if($numberOfMonths && is_numeric($numberOfMonths)){
+            $this->numberOfMonths = (int) $numberOfMonths;
+        }
         $dateTime = clone $dateTime;
         $this->sourceDateTime = $dateTime;
 
